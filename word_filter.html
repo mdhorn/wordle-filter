@@ -82,6 +82,27 @@
     .word-button:focus {
       background: #eee;
     }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #ddd;
+      padding: 0.45rem;
+      text-align: left;
+    }
+
+    th {
+      background: #f7f7f7;
+    }
+
+    #unusedWords {
+      min-height: 120px;
+    }
   </style>
 </head>
 <body>
@@ -103,6 +124,7 @@
   <div class="controls">
     <button id="filterButton" type="button">Filter</button>
     <button id="showSEndingButton" type="button">Show words ending in S</button>
+    <button id="checkUsedButton" type="button">Check used Wordle answers</button>
     <button id="undoButton" type="button" disabled>Undo</button>
     <button id="clearButton" type="button">Clear</button>
   </div>
@@ -110,15 +132,35 @@
   <div id="count" class="count"></div>
   <div id="sEndingWords" class="word-list" aria-live="polite"></div>
 
+  <h2>Used Wordle answer check</h2>
+  <div id="usedStatus" class="note">Not checked yet.</div>
+  <h3>Not previously used</h3>
+  <textarea id="unusedWords" readonly></textarea>
+  <h3>Previously used</h3>
+  <table id="usedWordsTable">
+    <thead>
+      <tr>
+        <th>Word</th>
+        <th>#</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
   <script>
     const wordsBox = document.getElementById("words");
     const lettersBox = document.getElementById("letters");
     const filterButton = document.getElementById("filterButton");
     const showSEndingButton = document.getElementById("showSEndingButton");
+    const checkUsedButton = document.getElementById("checkUsedButton");
     const undoButton = document.getElementById("undoButton");
     const clearButton = document.getElementById("clearButton");
     const count = document.getElementById("count");
     const sEndingWords = document.getElementById("sEndingWords");
+    const usedStatus = document.getElementById("usedStatus");
+    const unusedWords = document.getElementById("unusedWords");
+    const usedWordsTableBody = document.querySelector("#usedWordsTable tbody");
 
     let previousWords = "";
     let previousLetters = "";
@@ -168,6 +210,9 @@
 
       wordsBox.value = filteredWords.join("\n");
       clearSEndingWords();
+      unusedWords.value = "";
+      usedWordsTableBody.innerHTML = "";
+      usedStatus.textContent = "Not checked yet.";
       updateCount();
     }
 
@@ -212,6 +257,70 @@
       updateCount();
     }
 
+    async function checkUsedWordleAnswers() {
+      usedStatus.textContent = "Loading used Wordle answer list...";
+      unusedWords.value = "";
+      usedWordsTableBody.innerHTML = "";
+
+      try {
+        const response = await fetch("used-wordle-answers.json", { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error(`Could not load used-wordle-answers.json: ${response.status}`);
+        }
+
+        const usedAnswers = await response.json();
+        const usedMap = new Map();
+
+        usedAnswers.forEach(entry => {
+          const key = entry.word.toLowerCase();
+          if (!usedMap.has(key)) {
+            usedMap.set(key, []);
+          }
+          usedMap.get(key).push(entry);
+        });
+
+        const words = parseWords(wordsBox.value);
+        const previouslyUsed = [];
+        const notPreviouslyUsed = [];
+
+        words.forEach(word => {
+          const matches = usedMap.get(word.toLowerCase());
+
+          if (matches) {
+            matches.forEach(match => {
+              previouslyUsed.push({
+                word,
+                number: match.number,
+                date: match.date
+              });
+            });
+          } else
+            notPreviouslyUsed.push(word);
+          }
+        });
+
+        unusedWords.value = notPreviouslyUsed.join("\n");
+
+        previouslyUsed
+          .sort((a, b) => Number(b.number) - Number(a.number))
+          .forEach(entry => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${entry.word.toUpperCase()}</td>
+              <td>${entry.number}</td>
+              <td>${entry.date}</td>
+            `;
+            usedWordsTableBody.appendChild(row);
+          });
+
+        usedStatus.textContent =
+          `${notPreviouslyUsed.length} not previously used, ${previouslyUsed.length} previously used.`;
+      } catch (error) {
+        usedStatus.textContent = error.message;
+      }
+    }
+
     function clearAll() {
       previousWords = "";
       previousLetters = "";
@@ -224,7 +333,8 @@
 
     filterButton.addEventListener("click", filterWords);
     showSEndingButton.addEventListener("click", showSEndingWords);
-    undoButton.addEventListener("click", undoFilter);
+    checkUsedButton.addEventListener("click", checkUsedWordleAnswers);
+    undoButton.addEventListener("click",
     clearButton.addEventListener("click", clearAll);
     wordsBox.addEventListener("input", updateCount);
 
