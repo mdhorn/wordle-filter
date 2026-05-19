@@ -295,7 +295,7 @@
                 date: match.date
               });
             });
-          } else
+          } else {
             notPreviouslyUsed.push(word);
           }
         });
@@ -334,7 +334,7 @@
     filterButton.addEventListener("click", filterWords);
     showSEndingButton.addEventListener("click", showSEndingWords);
     checkUsedButton.addEventListener("click", checkUsedWordleAnswers);
-    undoButton.addEventListener("click",
+    undoButton.addEventListener("click", undoFilter);
     clearButton.addEventListener("click", clearAll);
     wordsBox.addEventListener("input", updateCount);
 
