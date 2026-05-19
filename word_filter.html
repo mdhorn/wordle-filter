@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>5-Letter Word Filter</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.4;
+    }
+
+    textarea,
+    input,
+    button {
+      font: inherit;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 260px;
+      box-sizing: border-box;
+      padding: 0.75rem;
+      margin-top: 0.35rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.6rem;
+      margin-top: 0.35rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+    }
+
+    button {
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .note {
+      color: #555;
+      font-size: 0.95rem;
+    }
+
+    .count {
+      font-weight: 600;
+      margin-top: 1rem;
+    }
+
+    .word-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .word-button {
+      border: 1px solid #bbb;
+      border-radius: 999px;
+      background: #f7f7f7;
+      padding: 0.35rem 0.7rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .word-button:hover,
+    .word-button:focus {
+      background: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>5-Letter Word Filter</h1>
+
+  <p class="note">
+    Paste one word per line. Enter letters to exclude. The filter behaves like
+    <code>grep -v '[letters]'</code>, meaning it removes any word containing any of those letters.
+  </p>
+
+  <label for="words"><strong>Word list</strong></label>
+  <textarea id="words" placeholder="doggy&#10;dowdy&#10;godly&#10;golly&#10;polly&#10;woody&#10;wooly&#10;woozy"></textarea>
+
+  <p>
+    <label for="letters"><strong>Letters to exclude</strong></label>
+    <input id="letters" placeholder="Example: dgw" />
+  </p>
+
+  <div class="controls">
+    <button id="filterButton" type="button">Filter</button>
+    <button id="showSEndingButton" type="button">Show words ending in S</button>
+    <button id="undoButton" type="button" disabled>Undo</button>
+    <button id="clearButton" type="button">Clear</button>
+  </div>
+
+  <div id="count" class="count"></div>
+  <div id="sEndingWords" class="word-list" aria-live="polite"></div>
+
+  <script>
+    const wordsBox = document.getElementById("words");
+    const lettersBox = document.getElementById("letters");
+    const filterButton = document.getElementById("filterButton");
+    const showSEndingButton = document.getElementById("showSEndingButton");
+    const undoButton = document.getElementById("undoButton");
+    const clearButton = document.getElementById("clearButton");
+    const count = document.getElementById("count");
+    const sEndingWords = document.getElementById("sEndingWords");
+
+    let previousWords = "";
+    let previousLetters = "";
+
+    function parseWords(text) {
+      return text
+        .split(/\r?\n/)
+        .map(word => word.trim())
+        .filter(Boolean);
+    }
+
+    function uniqueLetters(text) {
+      return [...new Set(text.toLowerCase().replace(/[^a-z]/g, ""))];
+    }
+
+    function updateCount() {
+      const wordCount = parseWords(wordsBox.value).length;
+      count.textContent = wordCount === 1 ? "1 word" : `${wordCount} words`;
+    }
+
+    function saveUndoState() {
+      previousWords = wordsBox.value;
+      previousLetters = lettersBox.value;
+      undoButton.disabled = false;
+    }
+
+    function clearSEndingWords() {
+      sEndingWords.innerHTML = "";
+    }
+
+    function filterWords() {
+      const excludedLetters = uniqueLetters(lettersBox.value);
+      const words = parseWords(wordsBox.value);
+
+      saveUndoState();
+
+      if (excludedLetters.length === 0) {
+        clearSEndingWords();
+        updateCount();
+        return;
+      }
+
+      const filteredWords = words.filter(word => {
+        const lowerWord = word.toLowerCase();
+        return !excludedLetters.some(letter => lowerWord.includes(letter));
+      });
+
+      wordsBox.value = filteredWords.join("\n");
+      clearSEndingWords();
+      updateCount();
+    }
+
+    function undoFilter() {
+      wordsBox.value = previousWords;
+      lettersBox.value = previousLetters;
+      undoButton.disabled = true;
+      clearSEndingWords();
+      updateCount();
+    }
+
+    function showSEndingWords() {
+      clearSEndingWords();
+
+      const words = parseWords(wordsBox.value);
+      const sWords = words.filter(word => word.toLowerCase().endsWith("s"));
+
+      if (sWords.length === 0) {
+        sEndingWords.textContent = "No words ending in S.";
+        return;
+      }
+
+      sWords.forEach(word => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "word-button";
+        button.textContent = word;
+        button.title = `Delete ${word}`;
+        button.addEventListener("click", () => deleteWord(word));
+        sEndingWords.appendChild(button);
+      });
+    }
+
+    function deleteWord(wordToDelete) {
+      saveUndoState();
+
+      const words = parseWords(wordsBox.value);
+      const remainingWords = words.filter(word => word !== wordToDelete);
+
+      wordsBox.value = remainingWords.join("\n");
+      showSEndingWords();
+      updateCount();
+    }
+
+    function clearAll() {
+      previousWords = "";
+      previousLetters = "";
+      wordsBox.value = "";
+      lettersBox.value = "";
+      undoButton.disabled = true;
+      clearSEndingWords();
+      updateCount();
+    }
+
+    filterButton.addEventListener("click", filterWords);
+    showSEndingButton.addEventListener("click", showSEndingWords);
+    undoButton.addEventListener("click", undoFilter);
+    clearButton.addEventListener("click", clearAll);
+    wordsBox.addEventListener("input", updateCount);
+
+    updateCount();
+  </script>
+</body>
+</html>
